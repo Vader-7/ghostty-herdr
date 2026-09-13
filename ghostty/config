@@ -1,0 +1,78 @@
+# ══════════════════════════════════════════════════════
+#  Ghostty · setup terminal  —  tema Vesper
+#  (negro #101010 y texto blanco, con acentos melocotón.
+#   Siempre oscuro, sin seguir la apariencia del sistema)
+# ══════════════════════════════════════════════════════
+
+theme = Vesper
+font-family = JetBrainsMono Nerd Font Mono
+font-size = 16
+# interlineado: el aire que hace que se sienta menos apretado
+adjust-cell-height = 12%
+
+# ─── Fondo ───────────────────────────────────────────
+# Ruta ABSOLUTA (el hook de zsh hace un test -f sobre ella). Genera la version -blur con make-blur.py
+background-image = /Users/you/Pictures/wallpaper.jpg
+background-image-fit = cover
+background-image-position = center
+background-image-opacity = 0.45
+background-opacity = 1.0
+# background-blur = 24   # inerte con opacity 1.0
+
+# ─── Ventana ─────────────────────────────────────────
+window-padding-x = 48
+window-padding-y = 24
+window-padding-balance = true
+macos-titlebar-style = hidden
+# left: Option izquierdo = Alt (atajos de herdr).
+# Option derecho conserva las teclas muertas del layout ABC: Option+n, n -> ñ ; Option+e, a -> á.
+macos-option-as-alt = left
+
+# ─── Cursor ──────────────────────────────────────────
+cursor-style = block
+cursor-style-blink = false
+
+# ─── Comportamiento ──────────────────────────────────
+mouse-hide-while-typing = true
+confirm-close-surface = false
+unfocused-split-opacity = 0.85
+
+# ─── Splits (paneles) ────────────────────────────────
+keybind = cmd+d=new_split:right
+keybind = cmd+shift+d=new_split:down
+keybind = cmd+shift+enter=toggle_split_zoom
+
+# ─── herdr: atajos directos (Ghostty manda el prefijo ctrl+b = \x02) ───
+# Teclas por POSICION FISICA (codigos W3C: key_h, backquote, bracket_left...).
+# No dependen del layout: ABC, Latin American o el que sea, la tecla no se mueve.
+# Todos con el Option IZQUIERDO, ver macos-option-as-alt arriba.
+# Paneles
+keybind = alt+key_h=text:\x02h
+keybind = alt+key_j=text:\x02j
+keybind = alt+key_k=text:\x02k
+keybind = alt+key_l=text:\x02l
+keybind = alt+key_z=text:\x02z
+keybind = alt+key_v=text:\x02v
+keybind = alt+key_s=text:\x02-
+# Ultimo panel: en algunos teclados 65% el backquote es Fn+Esc, por eso el alias en semicolon
+keybind = alt+backquote=text:\x02u
+keybind = alt+semicolon=text:\x02u
+# Saltar
+keybind = alt+key_g=text:\x02g
+keybind = alt+key_b=text:\x02b
+# Espacios
+keybind = alt+tab=text:\x02a
+keybind = alt+shift+tab=text:\x02A
+# Agentes
+keybind = alt+key_a=text:\x02d
+keybind = alt+shift+key_a=text:\x02f
+# Tabs
+keybind = alt+bracket_right=text:\x02n
+keybind = alt+bracket_left=text:\x02p
+keybind = alt+key_c=text:\x02c
+# Ocasional (con shift)
+keybind = alt+shift+key_w=text:\x02w
+keybind = alt+shift+key_n=text:\x02N
+keybind = alt+shift+key_r=text:\x02W
+keybind = alt+shift+key_t=text:\x02T
+keybind = alt+shift+key_x=text:\x02x

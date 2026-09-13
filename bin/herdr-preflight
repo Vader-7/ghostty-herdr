@@ -1,0 +1,172 @@
+#!/usr/bin/env bash
+# Actualiza los CLIs de agentes que usas en herdr.
+# NO habla con el servidor de herdr ni lo levanta: solo parsea `herdr agent start --help`,
+# que es lectura local de argumentos.
+#
+# Uso:  herdr-preflight [--force] [--quiet] [--list]
+# Env:
+#   HERDR_PREFLIGHT_THROTTLE_HOURS  horas entre corridas reales (default 12, 0 = siempre)
+#   HERDR_PREFLIGHT_TIMEOUT         segundos maximos por CLI (default 90)
+#   HERDR_PREFLIGHT_SKIP            1 para saltar todo
+set -u
+
+HERDR_BIN="${HERDR_BIN_PATH:-$HOME/.local/bin/herdr}"
+CLIS_FILE="$HOME/.config/herdr/preflight-clis"
+STATE_DIR="$HOME/.local/state/herdr-preflight"
+LOG="$STATE_DIR/update.log"
+STAMP="$STATE_DIR/last-run"
+LOCK="$STATE_DIR/lock"
+
+THROTTLE_HOURS="${HERDR_PREFLIGHT_THROTTLE_HOURS:-12}"
+CLI_TIMEOUT="${HERDR_PREFLIGHT_TIMEOUT:-90}"
+
+FORCE=0; QUIET=0; LIST_ONLY=0
+for a in "$@"; do
+  case "$a" in
+    --force) FORCE=1 ;;
+    --quiet) QUIET=1 ;;
+    --list)  LIST_ONLY=1 ;;
+    -h|--help) sed -n '2,12p' "$0"; exit 0 ;;
+  esac
+done
+
+mkdir -p "$STATE_DIR"
+say() { [ "$QUIET" = 1 ] || printf '%s\n' "$*"; }
+log() { printf '[%s] %s\n' "$(date '+%F %T')" "$*" >>"$LOG"; }
+
+[ "${HERDR_PREFLIGHT_SKIP:-0}" = 1 ] && exit 0
+
+# --- que ejecutable corresponde a cada agente de herdr ---------------------
+exe_for() {
+  case "$1" in
+    cursor) echo "cursor-agent" ;;
+    *)      echo "$1" ;;
+  esac
+}
+
+# --- como se actualiza cada uno; rc 1 = no sabemos -------------------------
+update_cmd_for() {
+  case "$1" in
+    agy)      echo "agy update" ;;
+    claude)   echo "claude update" ;;
+    devin)    echo "devin update" ;;
+    cursor)   echo "cursor-agent update" ;;
+    opencode) echo "opencode upgrade" ;;
+    gemini)   echo "npm update -g @google/gemini-cli" ;;
+    codex)    echo "npm update -g @openai/codex" ;;
+    amp)      echo "npm update -g @sourcegraph/amp" ;;
+    *) return 1 ;;
+  esac
+}
+
+# --- que CLIs actualizar ---------------------------------------------------
+# 1) Si existe el archivo de config, manda ese (lista explicita, una por linea).
+# 2) Si no, auto: los agentes que herdr soporta y que ademas tenes instalados.
+pick_clis() {
+  if [ -s "$CLIS_FILE" ]; then
+    grep -vE '^[[:space:]]*(#|$)' "$CLIS_FILE" | tr -d ' \t'
+    return
+  fi
+  [ -x "$HERDR_BIN" ] || return 0
+  "$HERDR_BIN" agent start --help 2>&1 \
+    | grep -A3 'possible values' | tr -d '\n' \
+    | sed -E 's/.*\[possible values: ([^]]*)\].*/\1/' | tr -d ' ' | tr ',' '\n' \
+    | while read -r kind; do
+        [ -n "$kind" ] || continue
+        command -v "$(exe_for "$kind")" >/dev/null 2>&1 && echo "$kind"
+      done
+}
+
+# --- corre un update acotado en tiempo -------------------------------------
+# Va por pty (script -q): varios CLIs solo actualizan si creen estar en terminal,
+# y sin pty se van en silencio con rc=0 sin haber hecho nada.
+# stdin cerrado para que un prompt inesperado corte en vez de colgar la shell.
+run_capped() {
+  local secs="$1"; shift
+  local tmp rc pid watchdog
+  tmp="$(mktemp "$STATE_DIR/out.XXXXXX")"
+
+  if command -v script >/dev/null 2>&1; then
+    script -q /dev/null "$@" </dev/null >"$tmp" 2>&1 &
+  else
+    "$@" </dev/null >"$tmp" 2>&1 &
+  fi
+  pid=$!
+
+  ( sleep "$secs"; kill -TERM "$pid" 2>/dev/null ) >/dev/null 2>&1 &
+  watchdog=$!
+
+  wait "$pid"; rc=$?
+  kill -TERM "$watchdog" 2>/dev/null; wait "$watchdog" 2>/dev/null
+
+  # script(1) hace eco del EOF como "^D" seguido de backspaces: fuera tambien
+  tr -d '\r\004\010' <"$tmp" \
+    | sed -E 's/\x1b\[[0-9;?]*[a-zA-Z]//g; s/\x1b[=>]//g; s/\^D//g' \
+    | grep -v '^[[:space:]]*$' >>"$LOG"
+  rm -f "$tmp"
+  return "$rc"
+}
+
+CLIS="$(pick_clis)"
+
+if [ "$LIST_ONLY" = 1 ]; then
+  [ -z "$CLIS" ] && { say "no detecte ningun CLI de agente"; exit 0; }
+  printf '%s\n' "$CLIS"
+  exit 0
+fi
+
+[ -z "$CLIS" ] && { log "sin CLIs detectados, nada que hacer"; exit 0; }
+
+# --- throttle --------------------------------------------------------------
+if [ "$FORCE" = 0 ] && [ "$THROTTLE_HOURS" != 0 ] && [ -f "$STAMP" ]; then
+  now=$(date +%s); last=$(cat "$STAMP" 2>/dev/null || echo 0)
+  if [ $(( now - last )) -lt $(( THROTTLE_HOURS * 3600 )) ]; then
+    log "throttle activo, salto"
+    exit 0
+  fi
+fi
+
+# --- lock: dos ventanas de Ghostty a la vez no se pisan --------------------
+if ! mkdir "$LOCK" 2>/dev/null; then
+  log "otra corrida en curso, salto"
+  exit 0
+fi
+trap 'rmdir "$LOCK" 2>/dev/null' EXIT INT TERM
+
+log "=== corrida: $(printf '%s' "$CLIS" | tr '\n' ' ') ==="
+say "  herdr: actualizando CLIs …"
+
+failed=""; skipped=""
+for cli in $CLIS; do
+  if ! cmd="$(update_cmd_for "$cli")"; then
+    # Ruidoso a proposito: si aparece un agente nuevo, quiero enterarme.
+    skipped="$skipped $cli"
+    log "SIN RECETA: $cli (agregalo a update_cmd_for)"
+    continue
+  fi
+  bin="${cmd%% *}"
+  if ! command -v "$bin" >/dev/null 2>&1; then
+    skipped="$skipped $cli"
+    log "SKIP $cli: '$bin' no esta en PATH"
+    continue
+  fi
+  log "--- $cli: $cmd"
+  run_capped "$CLI_TIMEOUT" $cmd; rc=$?
+  if [ "$rc" = 0 ]; then
+    log "OK $cli"
+  else
+    failed="$failed $cli"
+    [ "$rc" = 143 ] && log "FALLO $cli: corto por timeout de ${CLI_TIMEOUT}s" \
+                    || log "FALLO $cli (rc=$rc)"
+  fi
+done
+
+date +%s >"$STAMP"
+
+if [ -n "$failed" ] || [ -n "$skipped" ]; then
+  [ -n "$failed" ]  && say "  herdr: fallaron ->$failed  (log: $LOG)"
+  [ -n "$skipped" ] && say "  herdr: sin receta de update ->$skipped"
+else
+  say "  herdr: CLIs al día ($(printf '%s' "$CLIS" | tr '\n' ' '))"
+fi
+log "=== fin ==="

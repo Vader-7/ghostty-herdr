@@ -1,0 +1,6 @@
+# CLIs de agentes a mantener actualizados antes de abrir herdr.
+# Uno por linea. Borra o vacia este archivo para que el script auto-detecte
+# (agentes soportados por herdr que tengas instalados).
+agy
+claude
+devin

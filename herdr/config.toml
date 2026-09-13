@@ -1,0 +1,28 @@
+onboarding = false
+
+[ui.toast]
+delivery = "terminal"
+# solo avisa si el agente sigue igual pasados 5 s:
+# lo que se destraba solo no interrumpe
+delay_seconds = 5
+
+[ui.sound]
+# mp3 propios, sacados de los sonidos de macOS y bajados 8 dB.
+# Rutas relativas a este archivo. Cambia el mp3 y suena otro.
+done_path    = "sounds/done-purr.mp3"      # el agente termino
+request_path = "sounds/request-tink.mp3"   # el agente te necesita
+
+[theme]
+name = "vesper"
+auto_switch = false
+
+# Acciones que herdr trae sin asignar. Ghostty las dispara via prefijo.
+[keys]
+previous_workspace = "prefix+a"
+next_workspace     = "prefix+shift+a"
+previous_agent     = "prefix+d"
+next_agent         = "prefix+f"
+last_pane          = "prefix+u"
+
+[ui]
+status_indicators = "symbols"
