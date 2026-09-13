@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Copia la configuracion a su sitio. Nunca pisa nada sin dejar un .bak con fecha.
-# Uso:  ./install.sh          (desde la raiz del repo)
+# Copies the config into place. Never overwrites without leaving a dated .bak.
+# Usage:  ./install.sh          (from the repo root)
 set -euo pipefail
 cd "$(dirname "$0")"
 
 STAMP="$(date +%Y%m%d-%H%M%S)"
-put() {  # put <origen en el repo> <destino>
+put() {  # put <repo source> <destination>
   local src="$1" dst="$2"
   mkdir -p "$(dirname "$dst")"
   if [ -e "$dst" ] && ! cmp -s "$src" "$dst"; then
@@ -22,7 +22,6 @@ put ghostty/make-blur.py  "$HOME/.config/ghostty/make-blur.py"
 
 echo "herdr"
 put herdr/config.toml     "$HOME/.config/herdr/config.toml"
-put herdr/preflight-clis  "$HOME/.config/herdr/preflight-clis"
 
 echo "bin"
 put bin/herdr-preflight   "$HOME/.local/bin/herdr-preflight"
@@ -35,15 +34,15 @@ echo "sounds"
 if command -v ffmpeg >/dev/null; then
   bash herdr/sounds/make-sounds.sh "$HOME/.config/herdr/sounds"
 else
-  echo "  sin ffmpeg: salto los mp3 (brew install ffmpeg y corre herdr/sounds/make-sounds.sh)"
+  echo "  no ffmpeg: skipping the mp3s (brew install ffmpeg, then run herdr/sounds/make-sounds.sh)"
 fi
 
 cat <<'EOF'
 
-Falta hacer a mano (ver README):
-  1. Edita ~/.config/ghostty/config y pon la ruta ABSOLUTA de tu wallpaper.
-     Genera la version difuminada:  python3 ~/.config/ghostty/make-blur.py /ruta/wallpaper.jpg
-  2. Agrega a tu ~/.zshrc:   source ~/.config/zsh/ghostty-herdr.zsh
-  3. Si el servidor de herdr ya corre:   herdr server reload-config
-  4. Recarga Ghostty:  cmd+shift+,
+Still manual (see README):
+  1. Edit ~/.config/ghostty/config: set background-image to the ABSOLUTE path of your wallpaper.
+     Build the blurred twin:  python3 ~/.config/ghostty/make-blur.py /path/to/wallpaper.jpg
+  2. Add to ~/.zshrc, after PATH is set:   source ~/.config/zsh/ghostty-herdr.zsh
+  3. Give Ghostty Accessibility permission (System Settings > Privacy & Security > Accessibility).
+  4. Reload Ghostty (cmd+shift+,). If the herdr server is already running:  herdr server reload-config
 EOF

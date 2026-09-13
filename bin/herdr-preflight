@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Actualiza los CLIs de agentes que usas en herdr.
-# NO habla con el servidor de herdr ni lo levanta: solo parsea `herdr agent start --help`,
-# que es lectura local de argumentos.
+# Updates the agent CLIs you use inside herdr.
+# Does NOT talk to the herdr server or start it: it only parses `herdr agent start --help`,
+# which is a local read of the argument list.
 #
-# Uso:  herdr-preflight [--force] [--quiet] [--list]
+# Usage:  herdr-preflight [--force] [--quiet] [--list]
 # Env:
-#   HERDR_PREFLIGHT_THROTTLE_HOURS  horas entre corridas reales (default 12, 0 = siempre)
-#   HERDR_PREFLIGHT_TIMEOUT         segundos maximos por CLI (default 90)
-#   HERDR_PREFLIGHT_SKIP            1 para saltar todo
+#   HERDR_PREFLIGHT_THROTTLE_HOURS  hours between real runs (default 12, 0 = always)
+#   HERDR_PREFLIGHT_TIMEOUT         max seconds per CLI (default 90)
+#   HERDR_PREFLIGHT_SKIP            1 to skip everything
 set -u
 
 HERDR_BIN="${HERDR_BIN_PATH:-$HOME/.local/bin/herdr}"
@@ -36,7 +36,7 @@ log() { printf '[%s] %s\n' "$(date '+%F %T')" "$*" >>"$LOG"; }
 
 [ "${HERDR_PREFLIGHT_SKIP:-0}" = 1 ] && exit 0
 
-# --- que ejecutable corresponde a cada agente de herdr ---------------------
+# --- which executable belongs to each herdr agent kind ---------------------
 exe_for() {
   case "$1" in
     cursor) echo "cursor-agent" ;;
@@ -44,7 +44,7 @@ exe_for() {
   esac
 }
 
-# --- como se actualiza cada uno; rc 1 = no sabemos -------------------------
+# --- how each one updates; rc 1 = no recipe --------------------------------
 update_cmd_for() {
   case "$1" in
     agy)      echo "agy update" ;;
@@ -59,9 +59,9 @@ update_cmd_for() {
   esac
 }
 
-# --- que CLIs actualizar ---------------------------------------------------
-# 1) Si existe el archivo de config, manda ese (lista explicita, una por linea).
-# 2) Si no, auto: los agentes que herdr soporta y que ademas tenes instalados.
+# --- which CLIs to update --------------------------------------------------
+# 1) If the config file exists, it rules (explicit list, one per line).
+# 2) Otherwise auto: the agent kinds herdr supports that are also installed.
 pick_clis() {
   if [ -s "$CLIS_FILE" ]; then
     grep -vE '^[[:space:]]*(#|$)' "$CLIS_FILE" | tr -d ' \t'
@@ -77,10 +77,11 @@ pick_clis() {
       done
 }
 
-# --- corre un update acotado en tiempo -------------------------------------
-# Va por pty (script -q): varios CLIs solo actualizan si creen estar en terminal,
-# y sin pty se van en silencio con rc=0 sin haber hecho nada.
-# stdin cerrado para que un prompt inesperado corte en vez de colgar la shell.
+# --- run one update with a time cap ----------------------------------------
+# Goes through a pty (script -q): several CLIs only update when they believe
+# they are in a terminal, and without a pty they exit quietly with rc=0 having
+# done nothing. stdin is closed so an unexpected prompt aborts instead of
+# hanging your shell.
 run_capped() {
   local secs="$1"; shift
   local tmp rc pid watchdog
@@ -99,7 +100,7 @@ run_capped() {
   wait "$pid"; rc=$?
   kill -TERM "$watchdog" 2>/dev/null; wait "$watchdog" 2>/dev/null
 
-  # script(1) hace eco del EOF como "^D" seguido de backspaces: fuera tambien
+  # script(1) echoes the EOF as "^D" followed by backspaces: strip those too
   tr -d '\r\004\010' <"$tmp" \
     | sed -E 's/\x1b\[[0-9;?]*[a-zA-Z]//g; s/\x1b[=>]//g; s/\^D//g' \
     | grep -v '^[[:space:]]*$' >>"$LOG"
@@ -110,44 +111,44 @@ run_capped() {
 CLIS="$(pick_clis)"
 
 if [ "$LIST_ONLY" = 1 ]; then
-  [ -z "$CLIS" ] && { say "no detecte ningun CLI de agente"; exit 0; }
+  [ -z "$CLIS" ] && { say "no agent CLI detected"; exit 0; }
   printf '%s\n' "$CLIS"
   exit 0
 fi
 
-[ -z "$CLIS" ] && { log "sin CLIs detectados, nada que hacer"; exit 0; }
+[ -z "$CLIS" ] && { log "no CLIs detected, nothing to do"; exit 0; }
 
 # --- throttle --------------------------------------------------------------
 if [ "$FORCE" = 0 ] && [ "$THROTTLE_HOURS" != 0 ] && [ -f "$STAMP" ]; then
   now=$(date +%s); last=$(cat "$STAMP" 2>/dev/null || echo 0)
   if [ $(( now - last )) -lt $(( THROTTLE_HOURS * 3600 )) ]; then
-    log "throttle activo, salto"
+    log "throttle active, skipping"
     exit 0
   fi
 fi
 
-# --- lock: dos ventanas de Ghostty a la vez no se pisan --------------------
+# --- lock: two Ghostty windows at once do not step on each other -----------
 if ! mkdir "$LOCK" 2>/dev/null; then
-  log "otra corrida en curso, salto"
+  log "another run in progress, skipping"
   exit 0
 fi
 trap 'rmdir "$LOCK" 2>/dev/null' EXIT INT TERM
 
-log "=== corrida: $(printf '%s' "$CLIS" | tr '\n' ' ') ==="
-say "  herdr: actualizando CLIs …"
+log "=== run: $(printf '%s' "$CLIS" | tr '\n' ' ') ==="
+say "  herdr: updating CLIs …"
 
-failed=""; skipped=""
+failed=""; missing=""; norecipe=""
 for cli in $CLIS; do
   if ! cmd="$(update_cmd_for "$cli")"; then
-    # Ruidoso a proposito: si aparece un agente nuevo, quiero enterarme.
-    skipped="$skipped $cli"
-    log "SIN RECETA: $cli (agregalo a update_cmd_for)"
+    # Loud on purpose: if a new agent shows up, I want to know.
+    norecipe="$norecipe $cli"
+    log "NO RECIPE: $cli (add it to update_cmd_for)"
     continue
   fi
   bin="${cmd%% *}"
   if ! command -v "$bin" >/dev/null 2>&1; then
-    skipped="$skipped $cli"
-    log "SKIP $cli: '$bin' no esta en PATH"
+    missing="$missing $cli"
+    log "SKIP $cli: '$bin' not in PATH"
     continue
   fi
   log "--- $cli: $cmd"
@@ -156,17 +157,18 @@ for cli in $CLIS; do
     log "OK $cli"
   else
     failed="$failed $cli"
-    [ "$rc" = 143 ] && log "FALLO $cli: corto por timeout de ${CLI_TIMEOUT}s" \
-                    || log "FALLO $cli (rc=$rc)"
+    [ "$rc" = 143 ] && log "FAIL $cli: killed by ${CLI_TIMEOUT}s timeout" \
+                    || log "FAIL $cli (rc=$rc)"
   fi
 done
 
 date +%s >"$STAMP"
 
-if [ -n "$failed" ] || [ -n "$skipped" ]; then
-  [ -n "$failed" ]  && say "  herdr: fallaron ->$failed  (log: $LOG)"
-  [ -n "$skipped" ] && say "  herdr: sin receta de update ->$skipped"
+if [ -n "$failed" ] || [ -n "$missing" ] || [ -n "$norecipe" ]; then
+  [ -n "$failed" ]   && say "  herdr: failed ->$failed  (log: $LOG)"
+  [ -n "$missing" ]  && say "  herdr: not installed ->$missing"
+  [ -n "$norecipe" ] && say "  herdr: no update recipe ->$norecipe"
 else
-  say "  herdr: CLIs al día ($(printf '%s' "$CLIS" | tr '\n' ' '))"
+  say "  herdr: CLIs up to date ($(printf '%s' "$CLIS" | tr '\n' ' '))"
 fi
-log "=== fin ==="
+log "=== end ==="

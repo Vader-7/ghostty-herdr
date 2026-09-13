@@ -2,21 +2,22 @@ onboarding = false
 
 [ui.toast]
 delivery = "terminal"
-# solo avisa si el agente sigue igual pasados 5 s:
-# lo que se destraba solo no interrumpe
+# only notify if the agent is still in the same state after 5 s:
+# whatever unblocks itself does not interrupt you
 delay_seconds = 5
 
 [ui.sound]
-# mp3 propios, sacados de los sonidos de macOS y bajados 8 dB.
-# Rutas relativas a este archivo. Cambia el mp3 y suena otro.
-done_path    = "sounds/done-purr.mp3"      # el agente termino
-request_path = "sounds/request-tink.mp3"   # el agente te necesita
+# Own mp3s, made from macOS system sounds lowered 8 dB (see sounds/make-sounds.sh).
+# Paths are relative to this file. Swap the mp3 to change the cue.
+# "request" is herdr's name for the needs-attention state (the post calls it blocked).
+done_path    = "sounds/done-purr.mp3"      # the agent finished
+request_path = "sounds/request-tink.mp3"   # the agent needs you
 
 [theme]
 name = "vesper"
 auto_switch = false
 
-# Acciones que herdr trae sin asignar. Ghostty las dispara via prefijo.
+# Actions herdr ships unbound. Ghostty triggers them through the prefix.
 [keys]
 previous_workspace = "prefix+a"
 next_workspace     = "prefix+shift+a"

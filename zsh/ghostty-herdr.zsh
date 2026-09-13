@@ -1,16 +1,20 @@
-# ghostty-herdr · trozos de .zshrc
-# Carga esto desde tu ~/.zshrc:   source ~/.config/zsh/ghostty-herdr.zsh
-# Son exactamente dos cosas: (1) el preflight de CLIs, (2) el fondo difuminado.
+# ghostty-herdr · the two .zshrc pieces
+# Source this from ~/.zshrc AFTER your PATH is set (it needs ~/.local/bin):
+#   source ~/.config/zsh/ghostty-herdr.zsh
+# Exactly two things: (1) the CLI preflight, (2) the wallpaper blur.
 
-# ─── herdr: CLIs al día antes de abrir herdr ──────────────
-# Corre una sola vez por ventana nueva de Ghostty, nunca dentro de un panel de
-# herdr (si no, se dispararia una vez por panel). Throttle de 12h en el script.
+# ─── herdr: CLIs up to date before opening herdr ──────────
+# Runs once per new Ghostty window, never inside a herdr pane (it would fire
+# once per pane otherwise). The 12 h throttle lives in the script.
 if [[ $- == *i* ]] && [[ $TERM_PROGRAM == ghostty ]] \
-   && [[ -z ${HERDR_ENV:-} ]] && [[ -z ${CLAUDECODE:-} ]] && [[ -z ${CI:-} ]]; then
+   && [[ -z ${HERDR_ENV:-} ]] && [[ -z ${CLAUDECODE:-} ]] && [[ -z ${CI:-} ]] \
+   && (( $+commands[herdr-preflight] )); then
   herdr-preflight
 fi
 
-# ═══════ modo trabajo: difumina el fondo al abrir un agente ═══════
+# ═══════ work mode: blur the wallpaper while an agent runs ═══════
+# Needs macOS Accessibility permission for Ghostty (System Settings > Privacy &
+# Security > Accessibility), otherwise the reload keystroke is silently dropped.
 _GH_CFG="$HOME/.config/ghostty/config"
 _GH_LOCKS="$HOME/.cache/ghostty-work"
 _GH_WORK_CMDS=(claude opencode gemini codex crush aider nvim vim lazygit btop)
@@ -35,7 +39,7 @@ _gh_bg() {                                  # _gh_bg blur | sharp
   _gh_reload
 }
 
-_gh_locks_alive() {                         # limpia PIDs muertos, devuelve cuantos quedan
+_gh_locks_alive() {                         # drops dead PIDs, returns 0 if any pane still works
   local f n=0
   mkdir -p "$_GH_LOCKS"
   for f in "$_GH_LOCKS"/*(N); do
@@ -53,7 +57,7 @@ _gh_preexec() {
 }
 _gh_precmd() {
   rm -f "$_GH_LOCKS/$$" 2>/dev/null
-  _gh_locks_alive || _gh_bg sharp          # solo si ningun otro panel sigue trabajando
+  _gh_locks_alive || _gh_bg sharp          # only when no other pane is still working
 }
 add-zsh-hook preexec _gh_preexec
 add-zsh-hook precmd  _gh_precmd

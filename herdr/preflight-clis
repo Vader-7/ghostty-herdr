@@ -1,6 +1,7 @@
-# CLIs de agentes a mantener actualizados antes de abrir herdr.
-# Uno por linea. Borra o vacia este archivo para que el script auto-detecte
-# (agentes soportados por herdr que tengas instalados).
+# Agent CLIs to keep updated before opening herdr. One per line.
+# Optional: copy to ~/.config/herdr/preflight-clis to pin the list.
+# Without this file herdr-preflight auto-detects: every agent kind herdr
+# supports that is also installed on this machine.
 agy
 claude
 devin
